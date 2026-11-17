@@ -38,6 +38,7 @@
 #include "nsAttrName.h"
 #include "nsTArray.h"
 #include "nsIMediaList.h"
+#include "nsContainerCondition.h"
 #include "nsCSSRules.h"
 #include "nsStyleSet.h"
 #include "mozilla/dom/Element.h"
@@ -519,8 +520,6 @@ LookForTargetPseudo(nsCSSSelector* aSelector,
   return true;
 }
 
-enum class ContainerEval : uint8_t { False, True, Unknown };
-
 struct ContainerSize {
   // Physical extents. Always real: cq units resolve against them whether or
   // not the axis is queryable.
@@ -915,74 +914,69 @@ FeatureNeedsBlockAxis(const nsMediaExpression& aExpr, bool aVertical)
          name.EqualsLiteral("maxheight");
 }
 
-// All expressions ANDed, queries ORed, `not` inverts, unknown resolves false.
+// True when any leaf in the tree needs the block axis.
+static bool
+ConditionNeedsBlockAxis(const nsContainerCondition& aCondition, bool aVertical)
+{
+  if (aCondition.GetKind() == nsContainerCondition::eFeature) {
+    return FeatureNeedsBlockAxis(aCondition.GetExpression(), aVertical);
+  }
+  for (const RefPtr<nsContainerCondition>& operand : aCondition.GetOperands()) {
+    if (ConditionNeedsBlockAxis(*operand, aVertical)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+namespace {
+class ContainerConditionEvaluator final : public nsContainerConditionEvaluator
+{
+public:
+  ContainerConditionEvaluator(const ContainerSize& aSize,
+                              nsPresContext* aPresContext)
+    : mSize(aSize), mPresContext(aPresContext) {}
+
+  ContainerEval EvaluateFeature(const nsMediaExpression& aExpression) override
+  {
+    return SizeFeatureAgainstContainer(&aExpression, mSize, mPresContext,
+                                       mSize.mFontSize);
+  }
+
+private:
+  const ContainerSize& mSize;
+  nsPresContext* mPresContext;
+};
+} // anonymous namespace
+
+// The tree is evaluated against the nearest eligible container with
+// three-valued logic; unknown resolves false.
 static ContainerEval
-EvaluateContainerCondition(nsMediaList* aCondition, const nsAString& aName,
-                           Element* aElement, nsPresContext* aPresContext)
+EvaluateContainerCondition(const nsContainerCondition* aCondition,
+                           const nsAString& aName, Element* aElement,
+                           nsPresContext* aPresContext)
 {
   ContainerSize size;
 
   // The block axis can only be answered by a `size` container, so a condition
   // needing it has to skip past `inline-size` containers while selecting.
-  // Every expression in the condition resolves against the container that gets
-  // selected, so one block-axis expression is enough to constrain the whole
-  // selection.
+  // Every leaf resolves against the container that gets selected, so one
+  // block-axis leaf is enough to constrain the whole selection.
   bool blockAxis = false;
   {
     WritingMode wm;
     if (nsIFrame* frame = aElement->GetPrimaryFrame()) {
       wm = frame->GetWritingMode();
     }
-    for (int32_t i = 0; i < aCondition->Length() && !blockAxis; ++i) {
-      const nsMediaQuery* query = aCondition->MediumAt(i);
-      for (const nsMediaExpression& expr : query->Expressions()) {
-        if (FeatureNeedsBlockAxis(expr, wm.IsVertical())) {
-          blockAxis = true;
-          break;
-        }
-      }
-    }
+    blockAxis = ConditionNeedsBlockAxis(*aCondition, wm.IsVertical());
   }
 
   if (!FindQueryContainer(aElement, aName, size, aPresContext, blockAxis)) {
     return ContainerEval::False;
   }
 
-  ContainerEval overall = ContainerEval::False;
-  for (int32_t i = 0; i < aCondition->Length(); ++i) {
-    const nsMediaQuery* query = aCondition->MediumAt(i);
-    ContainerEval result = query->HadUnknownExpression()
-                             ? ContainerEval::Unknown
-                             : ContainerEval::True;
-
-    for (const nsMediaExpression& expr : query->Expressions()) {
-      ContainerEval r =
-        SizeFeatureAgainstContainer(&expr, size, aPresContext, size.mFontSize);
-      if (r == ContainerEval::False) {
-        result = ContainerEval::False;
-        break;
-      }
-      if (r == ContainerEval::Unknown && result == ContainerEval::True) {
-        result = ContainerEval::Unknown;
-      }
-    }
-
-    if (query->IsNegated()) {
-      if (result == ContainerEval::True) {
-        result = ContainerEval::False;
-      } else if (result == ContainerEval::False) {
-        result = ContainerEval::True;
-      }
-    }
-
-    if (result == ContainerEval::True) {
-      return ContainerEval::True;
-    }
-    if (result == ContainerEval::Unknown) {
-      overall = ContainerEval::Unknown;
-    }
-  }
-  return overall;
+  ContainerConditionEvaluator evaluator(size, aPresContext);
+  return aCondition->Matches(evaluator);
 }
 
 static inline void
@@ -1067,7 +1061,8 @@ ContentEnumFunc(const RuleValue& value,
                    data->mTreeMatchContext,
                    nodeContext.mIsRelevantLink ? SelectorMatchesTreeFlags(0)
                                                : eLookForRelevantLink)) {
-      if (nsMediaList* condition = value.mRule->GetContainerCondition()) {
+      if (const nsContainerCondition* condition =
+            value.mRule->GetContainerCondition()) {
         if (EvaluateContainerCondition(
               condition, value.mRule->GetContainerName(), data->mElement,
               data->mPresContext) != ContainerEval::True) {

@@ -527,19 +527,20 @@ LookForTargetPseudo(nsCSSSelector* aSelector,
 // style resolution runs ahead of reflow.
 //
 // The inline axis is contained for every container type; the block axis only
-// for `size`.  aInlineAxis says which axis the query is on, aVertical is the
-// writing mode, since the two axes are physical here.
+// for `size`.  The extents are physical, so aIsWidth names the axis being
+// measured and aVertical only decides whether that axis happens to be the
+// inline one.
 static float
 QueryableExtent(const nsStylePosition* aPos, const nsSize& aRect,
-                bool aInlineAxis, bool aVertical, bool aBlockQueryable)
+                bool aIsWidth, bool aVertical, bool aBlockQueryable)
 {
-  const bool vertical = aInlineAxis == aVertical;
-  const nsStyleCoord& coord = vertical ? aPos->mHeight : aPos->mWidth;
-  if ((aInlineAxis || aBlockQueryable) && coord.ConvertsToLength()) {
+  const bool inlineAxis = aIsWidth != aVertical;
+  const nsStyleCoord& coord = aIsWidth ? aPos->mWidth : aPos->mHeight;
+  if ((inlineAxis || aBlockQueryable) && coord.ConvertsToLength()) {
     return nsPresContext::AppUnitsToFloatCSSPixels(coord.GetCoordValue());
   }
-  return nsPresContext::AppUnitsToFloatCSSPixels(vertical ? aRect.height
-                                                          : aRect.width);
+  return nsPresContext::AppUnitsToFloatCSSPixels(aIsWidth ? aRect.width
+                                                          : aRect.height);
 }
 
 struct ContainerSize {

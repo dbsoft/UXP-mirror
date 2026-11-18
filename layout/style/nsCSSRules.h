@@ -43,46 +43,10 @@ namespace mozilla {
 
 namespace dom {
 class DocGroup;
+struct CSSContainerCondition;
 } // namespace dom
 
 class ErrorResult;
-
-namespace dom {
-
-// Element type of CSSContainerRule.conditions: one prelude pair, name and query
-// as written.
-class CSSContainerCondition final : public nsISupports,
-                                    public nsWrapperCache
-{
-public:
-  CSSContainerCondition(nsISupports* aParent, const nsAString& aName,
-                        const nsAString& aQuery)
-    : mParent(aParent)
-    , mName(aName)
-    , mQuery(aQuery)
-  {
-  }
-
-  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(CSSContainerCondition)
-
-  nsISupports* GetParentObject() const { return mParent; }
-
-  virtual JSObject* WrapObject(JSContext* aCx,
-                               JS::Handle<JSObject*> aGivenProto) override;
-
-  void GetName(nsString& aResult) const { aResult = mName; }
-  void GetQuery(nsString& aResult) const { aResult = mQuery; }
-
-private:
-  ~CSSContainerCondition() {}
-
-  nsCOMPtr<nsISupports> mParent;
-  nsString mName;
-  nsString mQuery;
-};
-
-} // namespace dom
 
 namespace css {
 
@@ -133,10 +97,8 @@ public:
   {
     return mConditions;
   }
-  // WebIDL: the conditions as objects.  Same name the binding generates a call
-  // for, hence the rename above.
-  void GetConditions(
-      nsTArray<RefPtr<dom::CSSContainerCondition>>& aConditions) const;
+  // WebIDL: the conditions as dictionary values.
+  void GetConditions(nsTArray<dom::CSSContainerCondition>& aConditions) const;
   // Our XPCOM GetConditionText is OK
   virtual void SetConditionText(const nsAString& aConditionText,
                                 ErrorResult& aRv) override;

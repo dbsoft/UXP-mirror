@@ -99,7 +99,6 @@ EXPORTS.mozilla += [
 
 EXPORTS.mozilla.dom += [
     'CSS.h',
-    'CSSContainerCondition.h',
     'CSSLexer.h',
     'CSSRuleList.h',
     'CSSValue.h',

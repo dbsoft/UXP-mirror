@@ -6,8 +6,7 @@
  * The origin of this IDL file is
  * https://drafts.csswg.org/css-conditional-5/#csscontainercondition
  */
-[Exposed=Window, Pref="layout.css.container-queries.enabled"]
-interface CSSContainerCondition {
-  readonly attribute DOMString name;
-  readonly attribute DOMString query;
-};
+ dictionary CSSContainerCondition {
+   required DOMString name;
+   required DOMString query;
+ };

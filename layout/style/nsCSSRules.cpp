@@ -441,51 +441,16 @@ ImportRule::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
 }
 
 void
-MediaRule::GetConditions(
-    nsTArray<RefPtr<dom::CSSContainerCondition>>& aConditions) const
+MediaRule::GetConditions(nsTArray<dom::CSSContainerCondition>& aConditions) const
 {
+  aConditions.SetCapacity(mConditions.Length());
   for (const nsContainerConditionPair& pair : mConditions) {
-    nsAutoString name;
-    nsStyleUtil::AppendEscapedCSSIdent(pair.mName, name);
-
-    nsAutoString query;
+    dom::CSSContainerCondition* condition = aConditions.AppendElement();
+    nsStyleUtil::AppendEscapedCSSIdent(pair.mName, condition->mName);
     if (pair.mCondition) {
-      pair.mCondition->AppendToString(query);
+      pair.mCondition->AppendToString(condition->mQuery);
     }
-
-    aConditions.AppendElement(
-        new dom::CSSContainerCondition(this, name, query));
   }
-}
-
-NS_IMPL_CYCLE_COLLECTION_CLASS(dom::CSSContainerCondition)
-
-NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(dom::CSSContainerCondition)
-  NS_IMPL_CYCLE_COLLECTION_UNLINK_PRESERVED_WRAPPER
-  NS_IMPL_CYCLE_COLLECTION_UNLINK(mParent)
-NS_IMPL_CYCLE_COLLECTION_UNLINK_END
-
-NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(dom::CSSContainerCondition)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mParent)
-NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
-
-NS_IMPL_CYCLE_COLLECTION_TRACE_BEGIN(dom::CSSContainerCondition)
-  NS_IMPL_CYCLE_COLLECTION_TRACE_PRESERVED_WRAPPER
-NS_IMPL_CYCLE_COLLECTION_TRACE_END
-
-NS_IMPL_CYCLE_COLLECTING_ADDREF(dom::CSSContainerCondition)
-NS_IMPL_CYCLE_COLLECTING_RELEASE(dom::CSSContainerCondition)
-
-NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(dom::CSSContainerCondition)
-  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
-  NS_INTERFACE_MAP_ENTRY(nsISupports)
-NS_INTERFACE_MAP_END
-
-JSObject*
-dom::CSSContainerCondition::WrapObject(JSContext* aCx,
-                                       JS::Handle<JSObject*> aGivenProto)
-{
-  return CSSContainerConditionBinding::Wrap(aCx, this, aGivenProto);
 }
 
 /* virtual */ JSObject*

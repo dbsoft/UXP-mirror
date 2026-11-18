@@ -4773,10 +4773,10 @@ CSSParserImpl::ParseContainerConditionTerm()
   const bool nested = mToken.IsSymbol('(') ||
                       (eCSSToken_Ident == mToken.mType &&
                        mToken.mIdent.LowerCaseEqualsLiteral("not"));
-  UngetToken();
-
   if (nested) {
     // A group, not a term: it may contain and/or, so it needs the full parser.
+    // The peeked '(' (or "not") goes back on the scanner for it to read.
+    UngetToken();
     RefPtr<nsContainerCondition> inner = ParseContainerCondition();    if (!inner) {
       return nullptr;
     }
@@ -4787,7 +4787,10 @@ CSSParserImpl::ParseContainerConditionTerm()
   }
 
   // The leaf stays with ParseMediaQueryExpression, so eContainerQueryOnly,
-  // range syntax and the min-/max- rejection keep living in one place.
+  // range syntax and the min-/max- rejection keep living in one place.  The
+  // feature name is deliberately left consumed: aParenConsumed means the
+  // expression parser takes it from mToken instead of reading it, so ungetting
+  // it as well would hand it to the parser's *next* GetToken.
   nsMediaQuery query;
   query.SetType(nsGkAtoms::all);
   query.SetTypeOmitted();

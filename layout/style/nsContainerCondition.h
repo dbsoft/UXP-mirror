@@ -65,7 +65,7 @@ public:
   virtual ContainerEval EvaluateFeature(const nsMediaExpression& aExpression) = 0;
 
 protected:
-  ~nsContainerConditionEvaluator() {}
+  virtual ~nsContainerConditionEvaluator() {}
 };
 
 class nsContainerCondition final

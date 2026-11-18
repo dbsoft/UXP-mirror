@@ -944,10 +944,11 @@ private:
 // The tree is evaluated against the nearest eligible container with
 // three-valued logic; unknown resolves false.
 static ContainerEval
-EvaluateContainerCondition(const nsContainerCondition* aCondition,
-                           const nsAString& aName, Element* aElement,
-                           nsPresContext* aPresContext)
+EvaluateContainerCondition(const nsContainerConditionPair& aPair,
+                           Element* aElement, nsPresContext* aPresContext)
 {
+  const nsContainerCondition* aCondition = aPair.mCondition;
+  const nsString& aName = aPair.mName;
   ContainerSize size;
 
   // The block axis can only be answered by a `size` container, so a condition
@@ -955,7 +956,7 @@ EvaluateContainerCondition(const nsContainerCondition* aCondition,
   // Every leaf resolves against the container that gets selected, so one
   // block-axis leaf is enough to constrain the whole selection.
   bool blockAxis = false;
-  {
+  if (aCondition) {
     WritingMode wm;
     if (nsIFrame* frame = aElement->GetPrimaryFrame()) {
       wm = frame->GetWritingMode();
@@ -965,6 +966,11 @@ EvaluateContainerCondition(const nsContainerCondition* aCondition,
 
   if (!FindQueryContainer(aElement, aName, size, aPresContext, blockAxis)) {
     return ContainerEval::False;
+  }
+
+  // A name with no condition only asks for the container to exist.
+  if (!aCondition) {
+    return ContainerEval::True;
   }
 
   ContainerConditionEvaluator evaluator(size, aPresContext);
@@ -1053,11 +1059,21 @@ ContentEnumFunc(const RuleValue& value,
                    data->mTreeMatchContext,
                    nodeContext.mIsRelevantLink ? SelectorMatchesTreeFlags(0)
                                                : eLookForRelevantLink)) {
-      if (const nsContainerCondition* condition =
-            value.mRule->GetContainerCondition()) {
-        if (EvaluateContainerCondition(
-              condition, value.mRule->GetContainerName(), data->mElement,
-              data->mPresContext) != ContainerEval::True) {
+      // A rule with no pairs is an ordinary rule and always applies.  Otherwise
+      // any pair matching applies it.
+      const nsTArray<nsContainerConditionPair>& conditions =
+        value.mRule->GetContainerConditions();
+      if (!conditions.IsEmpty()) {
+        bool matched = false;
+        for (const nsContainerConditionPair& pair : conditions) {
+          if (EvaluateContainerCondition(pair, data->mElement,
+                                         data->mPresContext) ==
+              ContainerEval::True) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
           return;
         }
       }

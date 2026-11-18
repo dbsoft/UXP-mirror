@@ -47,6 +47,43 @@ class DocGroup;
 
 class ErrorResult;
 
+namespace dom {
+
+// Element type of CSSContainerRule.conditions: one prelude pair, name and query
+// as written.
+class CSSContainerCondition final : public nsISupports,
+                                    public nsWrapperCache
+{
+public:
+  CSSContainerCondition(nsISupports* aParent, const nsAString& aName,
+                        const nsAString& aQuery)
+    : mParent(aParent)
+    , mName(aName)
+    , mQuery(aQuery)
+  {
+  }
+
+  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(CSSContainerCondition)
+
+  nsISupports* GetParentObject() const { return mParent; }
+
+  virtual JSObject* WrapObject(JSContext* aCx,
+                               JS::Handle<JSObject*> aGivenProto) override;
+
+  void GetName(nsString& aResult) const { aResult = mName; }
+  void GetQuery(nsString& aResult) const { aResult = mQuery; }
+
+private:
+  ~CSSContainerCondition() {}
+
+  nsCOMPtr<nsISupports> mParent;
+  nsString mName;
+  nsString mQuery;
+};
+
+} // namespace dom
+
 namespace css {
 
 class MediaRule final : public ConditionRule,
@@ -92,22 +129,22 @@ public:
   void GetCssTextImpl(nsAString& aCssText) const override;
   void GetContainerName(nsString& aResult) const;
   void GetContainerQuery(nsString& aResult) const;
-  const nsContainerCondition* GetContainerCondition() const
+  const nsTArray<nsContainerConditionPair>& GetContainerConditions() const
   {
-    return mContainerCondition;
+    return mConditions;
   }
-  void SetContainerCondition(nsContainerCondition* aCondition)
-  {
-    mContainerCondition = aCondition;
-  }
+  // WebIDL: the conditions as objects.  Same name the binding generates a call
+  // for, hence the rename above.
+  void GetConditions(
+      nsTArray<RefPtr<dom::CSSContainerCondition>>& aConditions) const;
   // Our XPCOM GetConditionText is OK
   virtual void SetConditionText(const nsAString& aConditionText,
                                 ErrorResult& aRv) override;
   nsMediaList* Media() const;
 
-  void SetContainerQuery(const nsString& aName) {
+  void SetContainerQueries(const nsTArray<nsContainerConditionPair>& aConditions) {
     mIsContainerQuery = true;
-    mContainerName = aName;
+    mConditions = aConditions;
   }
   bool IsContainerQuery() const { return mIsContainerQuery; }
 
@@ -123,8 +160,7 @@ protected:
   RefPtr<nsMediaList> mMedia;
   // Container rules keep their condition as a tree; mMedia stays null for
   // them, since a flat media list cannot express a negated operand.
-  RefPtr<nsContainerCondition> mContainerCondition;
-  nsString mContainerName;
+  nsTArray<nsContainerConditionPair> mConditions;
   bool mIsContainerQuery;
 };
 
@@ -132,10 +168,9 @@ protected:
 // time reaches it without walking the group hierarchy.  Run after parsing, and
 // again whenever conditionText is replaced.
 struct ContainerStampData {
-  ContainerStampData(nsContainerCondition* aCondition, const nsString& aName)
-    : mCondition(aCondition), mName(aName) {}
-  RefPtr<nsContainerCondition> mCondition;
-  nsString mName;
+  explicit ContainerStampData(const nsTArray<nsContainerConditionPair>& aConditions)
+    : mConditions(aConditions) {}
+  const nsTArray<nsContainerConditionPair>& mConditions;
 };
 
 bool StampContainerCondition(Rule* aRule, void* aData);
